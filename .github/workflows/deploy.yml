@@ -1,0 +1,38 @@
+name: Despliegue a AWS EC2
+
+# El pipeline se disparará cada vez que haya un push a la rama main
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout del código
+      uses: actions/checkout@v3
+
+    - name: Copiar archivos al servidor EC2
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "."
+        target: "/home/ubuntu/flask-app"
+
+    - name: Ejecutar Docker en EC2
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd /home/ubuntu/flask-app
+          # Construimos la imagen directamente en el servidor
+          sudo docker build -t mi-app-flask .
+          # Detenemos y borramos el contenedor viejo (si existe) para no tener conflictos
+          sudo docker stop mi-contenedor-flask || true
+          sudo docker rm mi-contenedor-flask || true
+          # Levantamos la nueva versión
+          sudo docker run -d -p 5000:5000 --name mi-contenedor-flask mi-app-flask
